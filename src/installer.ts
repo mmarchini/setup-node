@@ -32,6 +32,7 @@ if (!tempDirectory) {
 //
 interface INodeVersion {
   version: string;
+  date: string;
   files: string[];
 }
 
@@ -81,7 +82,7 @@ export async function getNode(versionSpec: string, mirror: string) {
   core.addPath(toolPath);
 }
 
-async function queryLatestMatch(
+export async function queryLatestMatch(
   versionSpec: string,
   mirror: string
 ): Promise<string> {
@@ -101,7 +102,7 @@ async function queryLatestMatch(
       throw new Error(`Unexpected OS '${osPlat}'`);
   }
 
-  let versions: string[] = [];
+  let versions: INodeVersion[] = [];
   let dataUrl = `${mirror}/index.json`;
   let rest: restm.RestClient = new restm.RestClient('setup-node');
   let nodeVersions: INodeVersion[] =
@@ -109,7 +110,7 @@ async function queryLatestMatch(
   nodeVersions.forEach((nodeVersion: INodeVersion) => {
     // ensure this version supports your os and platform
     if (nodeVersion.files.indexOf(dataFileName) >= 0) {
-      versions.push(nodeVersion.version);
+      versions.push(nodeVersion);
     }
   });
 
@@ -119,18 +120,32 @@ async function queryLatestMatch(
 }
 
 // TODO - should we just export this from @actions/tool-cache? Lifted directly from there
-function evaluateVersions(versions: string[], versionSpec: string): string {
+function evaluateVersions(
+  versions: INodeVersion[],
+  versionSpec: string
+): string {
   let version = '';
   core.debug(`evaluating ${versions.length} versions`);
   versions = versions.sort((a, b) => {
-    if (semver.gt(a, b)) {
+    const versionA: semver.SemVer | null = semver.coerce(a.version);
+    const versionB: semver.SemVer | null = semver.coerce(b.version);
+    // If versions are equal, compare date instead
+    if (versionA === versionB || versionA === null || versionB === null) {
+      if (new Date(a.date) > new Date(b.date)) {
+        return 1;
+      }
+      return -1;
+    }
+    if (semver.gt(versionA, versionB)) {
       return 1;
     }
     return -1;
   });
   for (let i = versions.length - 1; i >= 0; i--) {
-    const potential: string = versions[i];
-    const satisfied: boolean = semver.satisfies(potential, versionSpec);
+    const potential: string = versions[i].version;
+    const semverPotential: semver.SemVer | null = semver.coerce(potential);
+    if (semverPotential === null) continue;
+    const satisfied: boolean = semver.satisfies(semverPotential, versionSpec);
     if (satisfied) {
       version = potential;
       break;
