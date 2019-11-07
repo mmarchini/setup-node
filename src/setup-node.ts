@@ -15,8 +15,13 @@ async function run() {
     if (!version) {
       version = core.getInput('node-version');
     }
+    let mirror = core.getInput('mirror');
+    if (!mirror) {
+      mirror = core.getInput('node-mirror') || 'https://nodejs.org/dist';
+    }
     if (version) {
-      await installer.getNode(version);
+      // TODO: installer doesn't support proxy
+      await installer.getNode(version, mirror);
     }
 
     // Output version of node and npm that are being used
