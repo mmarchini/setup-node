@@ -35,7 +35,7 @@ interface INodeVersion {
   files: string[];
 }
 
-export async function getNode(versionSpec: string) {
+export async function getNode(versionSpec: string, mirror: string) {
   // check cache
   let toolPath: string;
   toolPath = tc.find('node', versionSpec);
@@ -50,7 +50,7 @@ export async function getNode(versionSpec: string) {
       version = versionSpec;
     } else {
       // query nodejs.org for a matching version
-      version = await queryLatestMatch(versionSpec);
+      version = await queryLatestMatch(versionSpec, mirror);
       if (!version) {
         throw new Error(
           `Unable to find Node version '${versionSpec}' for platform ${osPlat} and architecture ${osArch}.`
@@ -63,7 +63,7 @@ export async function getNode(versionSpec: string) {
 
     if (!toolPath) {
       // download, extract, cache
-      toolPath = await acquireNode(version);
+      toolPath = await acquireNode(version, mirror);
     }
   }
 
@@ -81,7 +81,10 @@ export async function getNode(versionSpec: string) {
   core.addPath(toolPath);
 }
 
-async function queryLatestMatch(versionSpec: string): Promise<string> {
+async function queryLatestMatch(
+  versionSpec: string,
+  mirror: string
+): Promise<string> {
   // node offers a json list of versions
   let dataFileName: string;
   switch (osPlat) {
@@ -99,7 +102,7 @@ async function queryLatestMatch(versionSpec: string): Promise<string> {
   }
 
   let versions: string[] = [];
-  let dataUrl = 'https://nodejs.org/dist/index.json';
+  let dataUrl = `${mirror}/index.json`;
   let rest: restm.RestClient = new restm.RestClient('setup-node');
   let nodeVersions: INodeVersion[] =
     (await rest.get<INodeVersion[]>(dataUrl)).result || [];
@@ -143,7 +146,7 @@ function evaluateVersions(versions: string[], versionSpec: string): string {
   return version;
 }
 
-async function acquireNode(version: string): Promise<string> {
+async function acquireNode(version: string, mirror: string): Promise<string> {
   //
   // Download - a tool installer intimately knows how to get the tool (and construct urls)
   //
@@ -155,7 +158,7 @@ async function acquireNode(version: string): Promise<string> {
   let urlFileName: string =
     osPlat == 'win32' ? fileName + '.7z' : fileName + '.tar.gz';
 
-  let downloadUrl = 'https://nodejs.org/dist/v' + version + '/' + urlFileName;
+  let downloadUrl = `${mirror}/v` + version + '/' + urlFileName;
 
   let downloadPath: string;
 
@@ -163,7 +166,7 @@ async function acquireNode(version: string): Promise<string> {
     downloadPath = await tc.downloadTool(downloadUrl);
   } catch (err) {
     if (err instanceof tc.HTTPError && err.httpStatusCode == 404) {
-      return await acquireNodeFromFallbackLocation(version);
+      return await acquireNodeFromFallbackLocation(version, mirror);
     }
 
     throw err;
@@ -200,7 +203,8 @@ async function acquireNode(version: string): Promise<string> {
 // Note also that the files are normally zipped but in this case they are just an exe
 // and lib file in a folder, not zipped.
 async function acquireNodeFromFallbackLocation(
-  version: string
+  version: string,
+  mirror: string
 ): Promise<string> {
   // Create temporary folder to download in to
   let tempDownloadFolder: string =
@@ -210,8 +214,8 @@ async function acquireNodeFromFallbackLocation(
   let exeUrl: string;
   let libUrl: string;
   try {
-    exeUrl = `https://nodejs.org/dist/v${version}/win-${os.arch()}/node.exe`;
-    libUrl = `https://nodejs.org/dist/v${version}/win-${os.arch()}/node.lib`;
+    exeUrl = `${mirror}/v${version}/win-${os.arch()}/node.exe`;
+    libUrl = `${mirror}/v${version}/win-${os.arch()}/node.lib`;
 
     const exePath = await tc.downloadTool(exeUrl);
     await io.cp(exePath, path.join(tempDir, 'node.exe'));
@@ -219,8 +223,8 @@ async function acquireNodeFromFallbackLocation(
     await io.cp(libPath, path.join(tempDir, 'node.lib'));
   } catch (err) {
     if (err instanceof tc.HTTPError && err.httpStatusCode == 404) {
-      exeUrl = `https://nodejs.org/dist/v${version}/node.exe`;
-      libUrl = `https://nodejs.org/dist/v${version}/node.lib`;
+      exeUrl = `${mirror}/v${version}/node.exe`;
+      libUrl = `${mirror}/v${version}/node.lib`;
 
       const exePath = await tc.downloadTool(exeUrl);
       await io.cp(exePath, path.join(tempDir, 'node.exe'));

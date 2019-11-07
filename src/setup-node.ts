@@ -13,9 +13,13 @@ async function run() {
     if (!version) {
       version = core.getInput('node-version');
     }
+    let mirror = core.getInput('mirror');
+    if (!mirror) {
+      mirror = core.getInput('node-mirror') || 'https://nodejs.org/dist';
+    }
     if (version) {
       // TODO: installer doesn't support proxy
-      await installer.getNode(version);
+      await installer.getNode(version, mirror);
     }
 
     const registryUrl: string = core.getInput('registry-url');
